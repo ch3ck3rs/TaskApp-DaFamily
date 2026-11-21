@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Honey-Do List • DaDad, Momma & Porkchop</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @keyframes pulse-ring {
+      0% { transform: scale(0.95); opacity: 0.8; }
+      70% { transform: scale(1.25); opacity: 0; }
+      100% { transform: scale(0.95); opacity: 0; }
+    }
+    .recording-ring::before {
+      content: "";
+      position: absolute;
+      inset: -4px;
+      border-radius: 9999px;
+      background: rgba(239, 68, 68, 0.45);
+      animation: pulse-ring 1.4s infinite;
+    }
+  </style>
+</head>
+<body class="bg-stone-100 text-stone-800 min-h-screen font-sans antialiased">
+  <div class="max-w-3xl mx-auto px-4 py-6 sm:py-10">
+
+    <!-- Header -->
+    <header class="flex flex-wrap items-center justify-between gap-3 mb-6">
+      <div>
+        <h1 class="text-2xl sm:text-3xl font-bold tracking-tight text-stone-900">
+          🏡 Our Honey-Do List
+        </h1>
+        <p id="syncStatus" class="text-xs text-stone-500 mt-1">Connecting to shared household list...</p>
+      </div>
+      <div class="flex items-center gap-2">
+        <button
+          id="refreshBtn"
+          onclick="loadTasks()"
+          class="px-3 py-2 text-sm font-medium bg-white border border-stone-200 rounded-xl shadow-sm hover:bg-stone-50 transition"
+          title="Sync latest changes from other phones"
+        >
+          🔄 Sync
+        </button>
+        <button
+          onclick="openAiModal()"
+          class="px-4 py-2 text-sm font-semibold bg-amber-600 text-white rounded-xl shadow-sm hover:bg-amber-700 transition flex items-center gap-2"
+        >
+          <span>🎙️</span>
+          <span>Voice / AI Bulk Update</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Progress Bar -->
+    <div class="bg-white rounded-2xl p-4 shadow-sm border border-stone-200/80 mb-6">
+      <div class="flex justify-between text-xs font-semibold text-stone-600 mb-1.5">
+        <span id="progressLabel">0 of 0 completed</span>
+        <span id="progressPercent">0%</span>
+      </div>
+      <div class="w-full bg-stone-200 rounded-full h-2.5 overflow-hidden">
+        <div id="progressBar" class="bg-emerald-600 h-2.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+      </div>
+    </div>
+
+    <!-- TODAY'S ATTACK LIST -->
+    <section class="bg-amber-50/90 border-2 border-amber-300 rounded-2xl p-4 sm:p-5 shadow-sm mb-6">
+      <div class="flex items-center justify-between mb-3">
+        <div class="flex items-center gap-2">
+          <span class="text-xl">🔥</span>
+          <div>
+            <h2 class="text-lg font-bold text-amber-950">Today's Attack List</h2>
+            <p class="text-xs text-amber-800/80">Focus pile — knock these out first</p>
+          </div>
+        </div>
+        <span id="todayCount" class="text-xs font-bold px-2.5 py-1 rounded-full bg-amber-200/80 text-amber-950">0 tasks</span>
+      </div>
+      <div id="todayList" class="space-y-2.5"></div>
+    </section>
+
+    <!-- Quick Add Task Form -->
+    <form id="addTaskForm" class="bg-white rounded-2xl p-4 shadow-sm border border-stone-200/80 mb-6">
+      <div class="flex flex-col sm:flex-row gap-2.5 mb-2.5">
+        <input
+          id="taskTitleInput"
+          type="text"
+          required
+          placeholder="Add a new honey-do task..."
+          class="flex-1 px-3.5 py-2.5 rounded-xl border border-stone-300 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+        />
+        <button
+          type="submit"
+          class="px-5 py-2.5 bg-stone-900 text-white text-sm font-semibold rounded-xl hover:bg-stone-800 transition shrink-0"
+        >
+          + Add Task
+        </button>
+      </div>
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+        <select id="taskAssigneeInput" class="px-2.5 py-2 rounded-lg border border-stone-200 bg-stone-50 font-medium">
+          <option value="DaDad">🧔 DaDad</option>
+          <option value="Momma">👩 Momma</option>
+          <option value="Porkchop">🐷 Porkchop</option>
+          <option value="Unassigned">⚪ Unassigned</option>
+        </select>
+        <select id="taskCategoryInput" class="px-2.5 py-2 rounded-lg border border-stone-200 bg-stone-50">
+          <option value="Repairs">🔧 Repairs</option>
+          <option value="Errands">🚗 Errands</option>
+          <option value="Yard & Garage">🌿 Yard & Garage</option>
+          <option value="Cleaning">🧹 Cleaning</option>
+          <option value="Shopping">🛒 Shopping</option>
+          <option value="Other" selected>📌 Other</option>
+        </select>
+        <select id="taskPriorityInput" class="px-2.5 py-2 rounded-lg border border-stone-200 bg-stone-50">
+          <option value="High">🔴 High Priority</option>
+          <option value="Medium" selected>🟡 Medium Priority</option>
+          <option value="Low">🟢 Low Priority</option>
+        </select>
+        <label class="flex items-center gap-2 px-2.5 py-2 rounded-lg border border-amber-200 bg-amber-50/70 font-medium text-amber-950 cursor-pointer">
+          <input id="taskDoTodayInput" type="checkbox" class="rounded text-amber-600 focus:ring-amber-500" />
+          <span>🔥 Do Today</span>
+        </label>
+      </div>
+    </form>
+
+    <!-- Filters & Master Backlog -->
+    <section class="bg-white rounded-2xl p-4 sm:p-5 shadow-sm border border-stone-200/80">
+      <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
+        <h2 class="text-lg font-bold text-stone-900">📋 Master Backlog</h2>
+        <div class="flex flex-wrap gap-2 text-xs">
+          <select id="filterAssignee" onchange="render()" class="px-2.5 py-1.5 rounded-lg border border-stone-200 bg-stone-50 font-medium">
+            <option value="ALL">All People</option>
+            <option value="DaDad">🧔 DaDad</option>
+            <option value="Momma">👩 Momma</option>
+            <option value="Porkchop">🐷 Porkchop</option>
+            <option value="Unassigned">⚪ Unassigned</option>
+          </select>
+          <select id="filterStatus" onchange="render()" class="px-2.5 py-1.5 rounded-lg border border-stone-200 bg-stone-50">
+            <option value="ACTIVE">Active Only</option>
+            <option value="ALL">All Tasks</option>
+            <option value="COMPLETED">Completed</option>
+          </select>
+        </div>
+      </div>
+
+      <div id="backlogList" class="space-y-2.5"></div>
+    </section>
+  </div>
+
+  <!-- VOICE / AI BULK UPDATE MODAL -->
+  <div id="aiModal" class="fixed inset-0 bg-stone-950/60 backdrop-blur-xs hidden items-center justify-center p-4 z-50">
+    <div class="bg-white rounded-2xl max-w-lg w-full p-5 sm:p-6 shadow-xl border border-stone-200 max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="text-lg font-bold text-stone-900">🎙️ Voice / AI Bulk Update</h3>
+        <button onclick="closeAiModal()" class="text-stone-400 hover:text-stone-700 text-xl leading-none">&times;</button>
+      </div>
+      <p class="text-xs text-stone-600 mb-4">
+        Speak or type multiple updates at once—for example: <em>"Add buy mulch for DaDad, move the felt Christmas tree to today, and mark feed the dogs complete for Porkchop."</em>
+      </p>
+
+      <!-- Recording Controls -->
+      <div class="flex items-center gap-3 mb-3">
+        <button
+          id="recordBtn"
+          type="button"
+          onclick="toggleRecording()"
+          class="relative px-4 py-2.5 rounded-xl bg-red-600 text-white text-sm font-semibold hover:bg-red-700 transition flex items-center gap-2"
+        >
+          <span id="recordIcon">🎤</span>
+          <span id="recordLabel">Start Recording</span>
+        </button>
+        <span id="recordingHint" class="text-xs text-stone-500">Tap to speak your updates</span>
+      </div>
+
+      <textarea
+        id="aiTranscriptInput"
+        rows="4"
+        placeholder="Your spoken words will appear here, or you can type/paste a brain-dump list directly..."
+        class="w-full p-3 rounded-xl border border-stone-300 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 mb-3"
+      ></textarea>
+
+      <div class="flex justify-end gap-2 mb-4">
+        <button
+          id="analyzeBtn"
+          type="button"
+          onclick="analyzeWithGemini()"
+          class="px-4 py-2 rounded-xl bg-amber-600 text-white text-sm font-semibold hover:bg-amber-700 transition"
+        >
+          ✨ Preview Gemini Changes
+        </button>
+      </div>
+
+      <!-- Proposed Changes Preview -->
+      <div id="aiPreviewBox" class="hidden border-t border-stone-200 pt-4">
+        <p id="aiSummaryText" class="text-sm font-semibold text-stone-800 mb-2.5"></p>
+        <div id="aiActionsList" class="space-y-2 mb-4 max-h-56 overflow-y-auto"></div>
+        <div class="flex justify-end gap-2">
+          <button
+            type="button"
+            onclick="closeAiModal()"
+            class="px-4 py-2 rounded-xl border border-stone-200 text-sm font-medium hover:bg-stone-50"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onclick="applyAiActions()"
+            class="px-4 py-2 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700"
+          >
+            ✅ Apply All Changes
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let tasks = [];
+    let pendingActions = [];
+    let mediaRecorder = null;
+    let audioChunks = [];
+    let lastAudioBase64 = null;
+    let lastAudioMime = null;
+    let speechRecognition = null;
+
+    const ASSIGNEE_STYLES = {
+      DaDad: { badge: "bg-sky-100 text-sky-900 border-sky-200", emoji: "🧔" },
+      Momma: { badge: "bg-rose-100 text-rose-900 border-rose-200", emoji: "👩" },
+      Porkchop: { badge: "bg-violet-100 text-violet-900 border-violet-200", emoji: "🐷" },
+      Unassigned: { badge: "bg-stone-100 text-stone-700 border-stone-200", emoji: "⚪" }
+    };
+
+    const PRIORITY_DOT = {
+      High: "🔴",
+      Medium: "🟡",
+      Low: "🟢"
+    };
+
+    function setSyncStatus(text, isError = false) {
+      const el = document.getElementById("syncStatus");
+      el.textContent = text;
+      el.className = isError ? "text-xs text-red-600 mt-1 font-medium" : "text-xs text-stone-500 mt-1";
+    }
+
+    async function loadTasks() {
+      try {
+        setSyncStatus("Syncing shared list...");
+        const res = await fetch("/api/tasks");
+        if (!res.ok) throw new Error("Failed to load tasks");
+        const data = await res.json();
+        tasks = data.tasks || [];
+        render();
+        setSyncStatus("Synced • Shared across DaDad, Momma & Porkchop");
+      } catch (err) {
+        console.error(err);
+        setSyncStatus("Offline / Local fallback mode (check Netlify deploy)", true);
+      }
+    }
+
+    async function saveTasks() {
+      render();
+      try {
+        setSyncStatus("Saving changes...");
+        const res = await fetch("/api/tasks", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ tasks })
+        });
+        if (!res.ok) throw new Error("Save failed");
+        setSyncStatus("Saved & synced • " + new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
+      } catch (err) {
+        console.error(err);
+        setSyncStatus("Error saving to shared store", true);
+      }
+    }
+
+    document.getElementById("addTaskForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const titleInput = document.getElementById("taskTitleInput");
+      const title = titleInput.value.trim();
+      if (!title) return;
+
+      tasks.unshift({
+        id: "task-" + Date.now() + "-" + Math.random().toString(36).slice(2, 6),
+        title,
+        assignee: document.getElementById("taskAssigneeInput").value,
+        category: document.getElementById("taskCategoryInput").value,
+        priority: document.getElementById("taskPriorityInput").value,
+        notes: "",
+        doToday: document.getElementById("taskDoTodayInput").checked,
+        completed: false,
+        createdAt: Date.now()
+      });
+
+      titleInput.value = "";
+      document.getElementById("taskDoTodayInput").checked = false;
+      await saveTasks();
+    });
+
+    async function toggleComplete(id) {
+      const t = tasks.find((x) => x.id === id);
+      if (!t) return;
+      t.completed = !t.completed;
+      await saveTasks();
+    }
+
+    async function toggleToday(id) {
+      const t = tasks.find((x) => x.id === id);
+      if (!t) return;
+      t.doToday = !t.doToday;
+      await saveTasks();
+    }
+
+    async function deleteTask(id) {
+      tasks = tasks.filter((x) => x.id !== id);
+      await saveTasks();
+    }
+
+    async function moveTodayTask(id, direction) {
+      const todayIndices = tasks
+        .map((t, idx) => (t.doToday && !t.completed ? idx : -1))
+        .filter((idx) => idx !== -1);
+      const pos = todayIndices.indexOf(tasks.findIndex((t) => t.id === id));
+      if (pos === -1) return;
+      const targetPos = pos + direction;
+      if (targetPos < 0 || targetPos >= todayIndices.length) return;
+
+      const idxA = todayIndices[pos];
+      const idxB = todayIndices[targetPos];
+      [tasks[idxA], tasks[idxB]] = [tasks[idxB], tasks[idxA]];
+      await saveTasks();
+    }
+
+    function createTaskCard(task, isTodaySection) {
+      const style = ASSIGNEE_STYLES[task.assignee] || ASSIGNEE_STYLES.Unassigned;
+      const div = document.createElement("div");
+      div.className = `flex items-start justify-between gap-3 p-3 rounded-xl border transition ${
+        task.completed
+          ? "bg-stone-50/80 border-stone-200 opacity-65"
+          : isTodaySection
+          ? "bg-white border-amber-200 shadow-2xs"
+          : "bg-stone-50/60 border-stone-200/90"
+      }`;
+
+      div.innerHTML = `
+        <div class="flex items-start gap-3 min-w-0 flex-1">
+          <input
+            type="checkbox"
+            ${task.completed ? "checked" : ""}
+            onchange="toggleComplete('${task.id}')"
+            class="mt-1 h-4 w-4 rounded border-stone-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+          />
+          <div class="min-w-0 flex-1">
+            <p class="text-sm font-semibold text-stone-900 ${task.completed ? "line-through text-stone-500" : ""}">
+              ${escapeHtml(task.title)}
+            </p>
+            ${task.notes ? `<p class="text-xs text-stone-500 mt-0.5">${escapeHtml(task.notes)}</p>` : ""}
+            <div class="flex flex-wrap items-center gap-1.5 mt-2">
+              <span class="text-[11px] font-semibold px-2 py-0.5 rounded-full border ${style.badge}">
+                ${style.emoji} ${escapeHtml(task.assignee)}
+              </span>
+              <span class="text-[11px] px-2 py-0.5 rounded-full bg-stone-200/70 text-stone-700">
+                ${escapeHtml(task.category)}
+              </span>
+              <span class="text-[11px] px-1.5 py-0.5 text-stone-600">
+                ${PRIORITY_DOT[task.priority] || "🟡"} ${escapeHtml(task.priority)}
+              </span>
+            </div>
+          </div>
+        </div>
+        <div class="flex items-center gap-1 shrink-0">
+          ${
+            isTodaySection && !task.completed
+              ? `<button onclick="moveTodayTask('${task.id}', -1)" title="Move up" class="p-1.5 text-xs text-stone-500 hover:text-stone-900 rounded-lg hover:bg-stone-100">↑</button>
+                 <button onclick="moveTodayTask('${task.id}', 1)" title="Move down" class="p-1.5 text-xs text-stone-500 hover:text-stone-900 rounded-lg hover:bg-stone-100">↓</button>`
+              : ""
+          }
+          <button
+            onclick="toggleToday('${task.id}')"
+            class="px-2.5 py-1 text-xs font-semibold rounded-lg border transition ${
+              task.doToday
+                ? "bg-amber-100 text-amber-900 border-amber-300 hover:bg-amber-200"
+                : "bg-white text-stone-700 border-stone-200 hover:bg-amber-50"
+            }"
+          >
+            ${task.doToday ? "Remove Today" : "+ Today"}
+          </button>
+          <button
+            onclick="deleteTask('${task.id}')"
+            title="Delete task"
+            class="p-1.5 text-xs text-stone-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition"
+          >
+            🗑️
+          </button>
+        </div>
+      `;
+      return div;
+    }
+
+    function render() {
+      const todayList = document.getElementById("todayList");
+      const backlogList = document.getElementById("backlogList");
+      const filterAssignee = document.getElementById("filterAssignee").value;
+      const filterStatus = document.getElementById("filterStatus").value;
+
+      // Progress
+      const total = tasks.length;
+      const done = tasks.filter((t) => t.completed).length;
+      const pct = total === 0 ? 0 : Math.round((done / total) * 100);
+      document.getElementById("progressLabel").textContent = `${done} of ${total} completed`;
+      document.getElementById("progressPercent").textContent = `${pct}%`;
+      document.getElementById("progressBar").style.width = `${pct}%`;
+
+      // Today's Attack List
+      const todayTasks = tasks.filter((t) => t.doToday && !t.completed);
+      document.getElementById("todayCount").textContent = `${todayTasks.length} task${todayTasks.length === 1 ? "" : "s"}`;
+      todayList.innerHTML = "";
+      if (todayTasks.length === 0) {
+        todayList.innerHTML = `<p class="text-xs text-amber-800/75 italic py-2">Nothing in Today's Attack List yet—click "+ Today" on any task below or use Voice / AI Bulk Update.</p>`;
+      } else {
+        todayTasks.forEach((t) => todayList.appendChild(createTaskCard(t, true)));
+      }
+
+      // Master Backlog
+      const filtered = tasks.filter((t) => {
+        if (filterAssignee !== "ALL" && t.assignee !== filterAssignee) return false;
+        if (filterStatus === "ACTIVE" && t.completed) return false;
+        if (filterStatus === "COMPLETED" && !t.completed) return false;
+        return true;
+      });
+
+      backlogList.innerHTML = "";
+      if (filtered.length === 0) {
+        backlogList.innerHTML = `<p class="text-xs text-stone-500 italic py-4 text-center">No tasks match your current filter.</p>`;
+      } else {
+        filtered.forEach((t) => backlogList.appendChild(createTaskCard(t, false)));
+      }
+    }
+
+    // --- VOICE & GEMINI BULK UPDATE ---
+    function openAiModal() {
+      document.getElementById("aiModal").classList.remove("hidden");
+      document.getElementById("aiModal").classList.add("flex");
+      document.getElementById("aiPreviewBox").classList.add("hidden");
+      pendingActions = [];
+      lastAudioBase64 = null;
+      lastAudioMime = null;
+    }
+
+    function closeAiModal() {
+      stopRecordingIfActive();
+      document.getElementById("aiModal").classList.add("hidden");
+      document.getElementById("aiModal").classList.remove("flex");
+    }
+
+    function stopRecordingIfActive() {
+      if (mediaRecorder && mediaRecorder.state !== "inactive") {
+        mediaRecorder.stop();
+      }
+      if (speechRecognition) {
+        try { speechRecognition.stop(); } catch (_) {}
+      }
+      const btn = document.getElementById("recordBtn");
+      btn.classList.remove("recording-ring");
+      document.getElementById("recordIcon").textContent = "🎤";
+      document.getElementById("recordLabel").textContent = "Start Recording";
+    }
+
+    async function toggleRecording() {
+      if (mediaRecorder && mediaRecorder.state === "recording") {
+        stopRecordingIfActive();
+        document.getElementById("recordingHint").textContent = "Recording captured! Ready to preview.";
+        return;
+      }
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        audioChunks = [];
+        lastAudioBase64 = null;
+        mediaRecorder = new MediaRecorder(stream);
+
+        mediaRecorder.ondataavailable = (e) => {
+          if (e.data.size > 0) audioChunks.push(e.data);
+        };
+
+        mediaRecorder.onstop = () => {
+          stream.getTracks().forEach((track) => track.stop());
+          const mime = mediaRecorder.mimeType || "audio/webm";
+          const blob = new Blob(audioChunks, { type: mime });
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            lastAudioBase64 = reader.result.split(",")[1];
+            lastAudioMime = mime;
+          };
+          reader.readAsDataURL(blob);
+        };
+
+        mediaRecorder.start();
+
+        // Live visual speech-to-text preview if supported by browser
+        const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (SpeechRec) {
+          speechRecognition = new SpeechRec();
+          speechRecognition.continuous = true;
+          speechRecognition.interimResults = true;
+          const existingText = document.getElementById("aiTranscriptInput").value.trim();
+          speechRecognition.onresult = (event) => {
+            let live = "";
+            for (let i = 0; i < event.results.length; i++) {
+              live += event.results[i][0].transcript;
+            }
+            document.getElementById("aiTranscriptInput").value = (existingText ? existingText + " " : "") + live;
+          };
+          speechRecognition.start();
+        }
+
+        document.getElementById("recordBtn").classList.add("recording-ring");
+        document.getElementById("recordIcon").textContent = "⏹️";
+        document.getElementById("recordLabel").textContent = "Stop Recording";
+        document.getElementById("recordingHint").textContent = "Listening... speak naturally";
+      } catch (err) {
+        alert("Microphone access denied or unavailable. You can still type or paste your list below!");
+      }
+    }
+
+    async function analyzeWithGemini() {
+      stopRecordingIfActive();
+      const transcript = document.getElementById("aiTranscriptInput").value.trim();
+      if (!transcript && !lastAudioBase64) {
+        alert("Please record a voice note or type some updates first.");
+        return;
+      }
+
+      const btn = document.getElementById("analyzeBtn");
+      btn.disabled = true;
+      btn.textContent = "⏳ Gemini is organizing...";
+
+      try {
+        const res = await fetch("/api/ai-voice-update", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            transcript,
+            audioBase64: lastAudioBase64,
+            mimeType: lastAudioMime,
+            currentTasks: tasks
+          })
+        });
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Gemini request failed");
+
+        pendingActions = data.actions || [];
+        document.getElementById("aiSummaryText").textContent = data.summary || "Proposed updates:";
+
+        const listEl = document.getElementById("aiActionsList");
+        listEl.innerHTML = "";
+
+        if (pendingActions.length === 0) {
+          listEl.innerHTML = `<p class="text-xs text-stone-500 italic">No actionable task changes detected.</p>`;
+        } else {
+          pendingActions.forEach((act) => {
+            const existing = tasks.find((t) => t.id === act.targetTaskId);
+            const labelMap = {
+              add: `➕ Add "${act.title}" (${act.assignee || "Unassigned"}${act.doToday ? " • 🔥 Today" : ""})`,
+              update: `✏️ Update "${existing ? existing.title : act.title}"${act.doToday === true ? " → Move to Today" : act.doToday === false ? " → Remove from Today" : ""}${act.assignee ? " (" + act.assignee + ")" : ""}`,
+              complete: `✅ Complete "${existing ? existing.title : act.title}"`,
+              uncomplete: `↩️ Reopen "${existing ? existing.title : act.title}"`,
+              delete: `🗑️ Delete "${existing ? existing.title : act.title}"`
+            };
+            const row = document.createElement("div");
+            row.className = "text-xs p-2.5 rounded-lg bg-stone-50 border border-stone-200 font-medium text-stone-800";
+            row.textContent = labelMap[act.type] || JSON.stringify(act);
+            listEl.appendChild(row);
+          });
+        }
+
+        document.getElementById("aiPreviewBox").classList.remove("hidden");
+      } catch (err) {
+        alert("Error analyzing updates: " + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "✨ Preview Gemini Changes";
+      }
+    }
+
+    async function applyAiActions() {
+      for (const act of pendingActions) {
+        if (act.type === "add" && act.title) {
+          tasks.unshift({
+            id: "task-" + Date.now() + "-" + Math.random().toString(36).slice(2, 6),
+            title: act.title,
+            assignee: act.assignee || "Unassigned",
+            category: act.category || "Other",
+            priority: act.priority || "Medium",
+            notes: act.notes || "",
+            doToday: Boolean(act.doToday),
+            completed: false,
+            createdAt: Date.now()
+          });
+        } else if (act.targetTaskId) {
+          const idx = tasks.findIndex((t) => t.id === act.targetTaskId);
+          if (idx === -1) continue;
+          if (act.type === "complete") tasks[idx].completed = true;
+          if (act.type === "uncomplete") tasks[idx].completed = false;
+          if (act.type === "delete") tasks.splice(idx, 1);
+          if (act.type === "update") {
+            if (act.title) tasks[idx].title = act.title;
+            if (act.assignee) tasks[idx].assignee = act.assignee;
+            if (act.category) tasks[idx].category = act.category;
+            if (act.priority) tasks[idx].priority = act.priority;
+            if (typeof act.doToday === "boolean") tasks[idx].doToday = act.doToday;
+            if (act.notes) tasks[idx].notes = act.notes;
+          }
+        }
+      }
+
+      document.getElementById("aiTranscriptInput").value = "";
+      closeAiModal();
+      await saveTasks();
+    }
+
+    function escapeHtml(str) {
+      return String(str || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    loadTasks();
+  </script>
+</body>
+</html>

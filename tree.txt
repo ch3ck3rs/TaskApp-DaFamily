@@ -1,0 +1,8 @@
+honey-do-list/
+├── index.html
+├── package.json
+├── netlify.toml
+└── netlify/
+    └── functions/
+        ├── tasks.mjs
+        └── ai-voice-update.mjs
