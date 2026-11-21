@@ -1,7 +1,5 @@
 import { GoogleGenAI, Type } from "@google/genai";
 
-const ai = new GoogleGenAI();
-
 const RESPONSE_SCHEMA = {
   type: Type.OBJECT,
   properties: {
@@ -17,40 +15,24 @@ const RESPONSE_SCHEMA = {
         properties: {
           type: {
             type: Type.STRING,
-            enum: ["add", "update", "complete", "uncomplete", "delete"],
-            description: "The operation type."
+            enum: ["add", "update", "complete", "uncomplete", "delete"]
           },
-          targetTaskId: {
-            type: Type.STRING,
-            description: "Exact ID of an existing task when type is update, complete, uncomplete, or delete. Omit for add."
-          },
-          title: {
-            type: Type.STRING,
-            description: "Task title (required for add, optional for update)."
-          },
+          targetTaskId: { type: Type.STRING },
+          title: { type: Type.STRING },
           assignee: {
             type: Type.STRING,
-            enum: ["DaDad", "Momma", "Porkchop", "Unassigned"],
-            description: "Who owns the task. Normalize variations like Dad -> DaDad, Mom/Mama -> Momma."
+            enum: ["DaDad", "Momma", "Porkchop", "Unassigned"]
           },
           category: {
             type: Type.STRING,
-            enum: ["Repairs", "Errands", "Yard & Garage", "Cleaning", "Shopping", "Other"],
-            description: "Best fitting category."
+            enum: ["Repairs", "Errands", "Yard & Garage", "Cleaning", "Shopping", "Other"]
           },
           priority: {
             type: Type.STRING,
-            enum: ["High", "Medium", "Low"],
-            description: "Task urgency."
+            enum: ["High", "Medium", "Low"]
           },
-          doToday: {
-            type: Type.BOOLEAN,
-            description: "True if the user wants this in Today's Attack List / do today pile."
-          },
-          notes: {
-            type: Type.STRING,
-            description: "Optional extra details mentioned for the task."
-          }
+          doToday: { type: Type.BOOLEAN },
+          notes: { type: Type.STRING }
         },
         required: ["type"]
       }
@@ -65,6 +47,9 @@ export default async (req) => {
   }
 
   try {
+    const apiKey = process.env.GEMINI_API_KEY;
+    const ai = apiKey ? new GoogleGenAI({ apiKey }) : new GoogleGenAI();
+
     const { transcript, audioBase64, mimeType, currentTasks } = await req.json();
 
     const promptText = `You are a helpful household task assistant for a family whose members are DaDad, Momma, and Porkchop.
@@ -77,12 +62,13 @@ Rules:
 4. Set "doToday": true if the user says to put it on today's list, do it today, or attack it today.
 
 EXISTING TASKS (JSON):
-${JSON.stringify(currentTasks || [], null, 2)}
+${JSON.stringify(currentTasks || [])}
 
 ${transcript ? `USER TRANSCRIPT:\n"${transcript}"` : "Listen to the attached audio recording and extract all requested task updates."}`;
 
     const contents = [];
-    if (audioBase64 && mimeType) {
+    // Only send raw audio if browser speech-to-text didn't already capture a transcript (keeps response under 2 seconds)
+    if (!transcript && audioBase64 && mimeType) {
       contents.push({
         inlineData: {
           data: audioBase64,
@@ -107,7 +93,7 @@ ${transcript ? `USER TRANSCRIPT:\n"${transcript}"` : "Listen to the attached aud
   } catch (err) {
     console.error("AI Voice Update Error:", err);
     return Response.json(
-      { error: err.message || "Failed to process voice update with Gemini." },
+      { error: err.message || String(err) },
       { status: 500 }
     );
   }
