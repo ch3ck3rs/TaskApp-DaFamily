@@ -79,7 +79,7 @@ ${transcript ? `USER TRANSCRIPT:\n"${transcript}"` : "Listen to the attached aud
     contents.push(promptText);
 
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: "gemini-3.8-flash",
       contents,
       config: {
         responseMimeType: "application/json",
